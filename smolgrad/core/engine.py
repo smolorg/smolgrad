@@ -154,6 +154,17 @@ class Tensor:
 
     # ------------------------ BINARY OPS -------------------------
 
+    def __matmul__(self, other):
+        """
+        matrix multiplication with tensors
+        """
+
+        assert isinstance(other, Tensor), f"Cannot matrix multiply Tensor with {type(other)}."
+        assert self._d == other._d, f"Tensors must be of the same type i.e. numpy or mlx"
+
+        
+
+
     def __add__(self, other):
         """
         elementwise add (takes broadcasting into account)
