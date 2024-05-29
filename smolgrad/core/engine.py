@@ -321,11 +321,11 @@ class Tensor:
                 def _add_backward_diff():
                     if self.requires_grad:
                         self.grad += self._d.reshape(
-                            mx.sum(out.grad, axis=laxis), self.shape
+                            self._d.sum(out.grad, axis=laxis), self.shape
                         )
                     if other.requires_grad:
                         other.grad += self._d.reshape(
-                            mx.sum(out.grad, axis=raxis), other.shape
+                            self._d.sum(out.grad, axis=raxis), other.shape
                         )
                 
                 out.grad_fn = _add_backward_diff
@@ -377,11 +377,11 @@ class Tensor:
                 def _mul_backward_diff():
                     if self.requires_grad:
                         self.grad += self._d.reshape(
-                            mx.sum(other.data * out.grad, axis=laxis), self.shape
+                            self._d.sum(other.data * out.grad, axis=laxis), self.shape
                         )
                     if other.requires_grad:
                         other.grad += self._d.reshape(
-                            mx.sum(self.data * out.grad, axis=raxis), other.shape
+                            self._d.sum(self.data * out.grad, axis=raxis), other.shape
                         )
                 
                 out.grad_fn = _mul_backward_diff
