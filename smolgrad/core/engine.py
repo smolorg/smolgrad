@@ -8,6 +8,10 @@ from typing import *
 from ..utils import broadcast_axis
 
 
+# constants
+DEFAULT_MIN = 1e-7
+DEFAULT_MAX = 1 - 1e-7
+
 # base type
 Array = Union[np.ndarray, mx.array]
 
@@ -95,6 +99,22 @@ class Tensor:
             if node.grad_fn is not None:
                 node.grad_fn()
     
+    def clip(
+            self, min: float = DEFAULT_MIN, 
+            max: float = DEFAULT_MAX, clip_grad: bool = False, 
+            grad_min: float = DEFAULT_MIN, grad_max: float = DEFAULT_MAX
+        ):
+        """
+        constrain the Tensor/gradient values between given min max range
+        """
+
+        self.data = self._d.clip(self.data, min, max)
+
+        if clip_grad and self.grad is not None:
+            self.grad = self._d.clip(self.grad, grad_min, grad_max)
+
+        return self
+
     # ----------------------- UNARY OPS --------------------------------
 
     def sum(self, axis: Tuple[int] = None, keepdims: bool = False):
