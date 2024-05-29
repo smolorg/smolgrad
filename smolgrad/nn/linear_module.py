@@ -24,7 +24,7 @@ class Linear(Module):
         self.use_np = False if device=="gpu" else True
 
         self.w = Tensor(
-            self._d.random.uniform(-1, 1, (in_features, out_features)),
+            self._d.random.uniform(-1, 1, (out_features, in_features)),
             dtype=dtype, requires_grad=True, use_np=self.use_np
         )
         if self.use_bias:
@@ -37,7 +37,7 @@ class Linear(Module):
         """
         fully connected layer's output is:
         
-        `o = x @ w + b`
+        `o = w @ x + b`
         """
-        out = X @ self.w + self.b
+        out = self.w @ X + self.b
         return out
