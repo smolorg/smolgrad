@@ -4,8 +4,9 @@ import smolgrad.nn as nn
 inp = sc.Tensor([1, 2, 3, 4, 5])
 
 layer = nn.Linear(5, 10)
+act = nn.ReLU()
 
-out: sc.Tensor = layer(inp)
+out: sc.Tensor = act(layer(inp))
 
 print("Output from Linear layer: ", out)
 print("Input shape: ", inp.shape)
@@ -16,5 +17,5 @@ print("Layer bias shape: ", layer.b.shape)
 # Output from Linear layer:  Tensor(array([-0.451915, -6.91314, -1.51139, ..., 5.53345, 0.63165, -0.392751], dtype=float32), requires_grad=True, is_mlx_tensor=True)
 # Input shape:  (5,)
 # Output shape:  (10,)
-# Layer weights shape:  (5, 10)
+# Layer weights shape:  (10, 5)
 # Layer bias shape:  (10,)

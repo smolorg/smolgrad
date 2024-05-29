@@ -13,7 +13,7 @@ it works by constructing a computational graph that represents the flow of data 
 an algorithm used in conjuction with autograd is **Backpropagation** to train neural networks. It is the process of propagating the gradients backward through the computational graph, from the output layer to the input layer, in order to update the model's parameters. This is the stuff which makes ML/DL models "learn".
 
 
-### how does this work
+### how does this work?
 
 so the most important file here is [smolgrad/core/engine.py](./smolgrad/core/engine.py) because it defines a `Tensor` class.
 

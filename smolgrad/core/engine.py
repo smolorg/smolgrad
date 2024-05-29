@@ -1,7 +1,13 @@
 # this file uses numpy / mlx in order to perform tensor operations
 
 import numpy as np
-import mlx.core as mx
+
+try:
+    import mlx.core as mx
+    MLX_AVAILABLE = True
+except ImportError as e:
+    print(">>> Warning: MLX cannot be imported. Using numpy as default...")
+    MLX_AVAILABLE = False
 
 from typing import *
 
@@ -19,8 +25,9 @@ Array = Union[np.ndarray, mx.array]
 def _get_d(device: str = "gpu"):
     # this is a bit misleading because mlx has unified cpu/gpu ram
     # will be fixing this soon
+    # also return numpy if mlx is not found or available
     if device == "cpu":    return np
-    if device == "gpu":    return mx
+    if device == "gpu":    return mx if MLX_AVAILABLE else np
 
 
 class Tensor:
