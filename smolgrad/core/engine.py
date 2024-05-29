@@ -161,9 +161,55 @@ class Tensor:
 
         assert isinstance(other, Tensor), f"Cannot matrix multiply Tensor with {type(other)}."
         assert self._d == other._d, f"Tensors must be of the same type i.e. numpy or mlx"
-
         
+        out = Tensor(self.data @ other.data, _children=(self, other), _op="@")
+        if not self.requires_grad and not other.requires_grad:
+            return out
 
+        # for 1D tensors, expand first dimension for first tensor
+        # and expand last dimension for second tensor
+        # example: (3,) @ (3,) becomes (1, 3) and (3, 1)
+        # which is compatible for matrix multiplication
+        le_axis = (0, ) if self.data.ndim == 1 else ()
+        re_axis = (-1, ) if other.data.ndim == 1 else ()
+
+        # resultant tensor's grad should be expanded by both le_axis and re_axis
+        rese_axis = le_axis + re_axis
+
+        # we need to take broadcasting into account
+        # except last two dimensions of shape (since they will be used for matmul)
+        # gradients will be summed along the broadcasted axes for both tensors
+        l, r = broadcast_axis(self.data.shape[:-2], other.data.shape[:-2])
+
+        # for 2D (can be generalized for more dimensions too):
+        #
+        # self.grad = out.grad @ other.data.T
+        # other.grad = self.data.T @ out.grad
+        
+        def _matmul_backward():
+            if self.requires_grad:
+                self.grad = self._d.reshape(
+                    self._d.sum(
+                        self._d.expand_dims(out.grad, axis=rese_axis) @
+                        self._d.expand_dims(other.data, axis=re_axis).swapaxes(-1, -2),
+                        axis = l
+                    ),
+                    self.data.shape
+                )
+            if other.requires_grad:
+                other.grad = self._d.reshape(
+                    self._d.sum(
+                        self._d.expand_dims(self.data, axis=le_axis).swapaxes(-1, -2) @
+                        self._d.expand_dims(out.grad, axis=rese_axis),
+                        axis = r
+                    ),
+                    other.data.shape
+                )
+
+        out.grad_fn = _matmul_backward
+        out.set_requires_grad(True)
+
+        return out
 
     def __add__(self, other):
         """
@@ -257,7 +303,24 @@ class Tensor:
 
             else:
                 # for broadcast multiply
-                pass
+                # different shapes, broadcast occurs
+                # gradient will be summed along the broadcasted axes
+                # since the out Tensor is result of broadcasting and addition
+                # in essence, broadcasted axes are copied and added, so gradients from 
+                # all the copies should be added
+                laxis, raxis = broadcast_axis(self.data.shape, other.data.shape)
+
+                def _mul_backward_diff():
+                    if self.requires_grad:
+                        self.grad += self._d.reshape(
+                            mx.sum(other.data * out.grad, axis=laxis), self.shape
+                        )
+                    if other.requires_grad:
+                        other.grad += self._d.reshape(
+                            mx.sum(self.data * out.grad, axis=raxis), other.shape
+                        )
+                
+                out.grad_fn = _mul_backward_diff
 
         out.set_requires_grad(True)
         return out
@@ -273,17 +336,3 @@ class Tensor:
             return f"Tensor({self.data}, requires_grad={self.requires_grad})"
         
         return f"Tensor({self.data})"
-
-
-a = Tensor(mx.arange(1, 13, 1).reshape((3, 4))); a.set_requires_grad(True)
-b = Tensor(mx.arange(1, 13, 1).reshape((3, 4))); b.set_requires_grad(True)
-
-d = a.half()
-k = a.half()
-
-e = d + k
-
-e.grad = mx.ones_like(e.data)
-e.backward()
-
-print(a.grad)
