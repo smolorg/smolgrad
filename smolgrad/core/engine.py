@@ -16,6 +16,13 @@ DEFAULT_MAX = 1 - 1e-7
 Array = Union[np.ndarray, mx.array]
 
 
+def _get_d(device: str = "gpu"):
+    # this is a bit misleading because mlx has unified cpu/gpu ram
+    # will be fixing this soon
+    if device == "cpu":    return np
+    if device == "gpu":    return mx
+
+
 class Tensor:
     """
     holds elements having the same dtype
@@ -31,7 +38,7 @@ class Tensor:
         ) -> None:
         
         self.is_np_tensor = use_np
-        self._d = self._get_d(device="gpu" if not use_np else "cpu")
+        self._d = _get_d(device="gpu" if not use_np else "cpu")
         self.dtype = dtype or self._d.float32
         
         # actual data
@@ -51,18 +58,18 @@ class Tensor:
         self.shape = self.data.shape
         self.ndim = len(self.shape)
 
-    def _get_d(self, device: str = "gpu"):
-        # this is a bit misleading because mlx has unified cpu/gpu ram
-        # will be fixing this soon
-        if device == "cpu":    return np
-        if device == "gpu":    return mx
+    def _reset_grad(self):
+        """
+        Sets the gradient values to zero
+        """
+        self.grad = self._d.zeros_like(self.data)
 
     def set_requires_grad(self, val: bool):
         if not isinstance(val, bool):
             raise ValueError("Value should be boolean")
         
         if self.grad is None and val == True:
-            self.grad = mx.zeros_like(self.data)
+            self._reset_grad()
 
         self.requires_grad = val
 

@@ -1,0 +1,43 @@
+from ..core import Tensor
+from ._module import Module
+
+
+class Linear(Module):
+    def __init__(
+        self, in_features: int, out_features: int, 
+        use_bias: bool = True, device: str = "gpu", dtype = None
+    ):
+        """
+        Fully connected linear layer.
+
+        Args:
+            in_features (int): Number of input features.
+            out_features (int): Number of output features.
+            bias (bool, optional): Whether to include bias terms. Default is True.
+            device (str, optional): Device on which the layer's tensors should reside. Default is "cpu".
+            dtype (str, optional): Data type of the tensors. Default is "float32".
+        """
+
+        super().__init__(device)
+
+        self.use_bias = use_bias
+        self.use_np = False if device=="gpu" else True
+
+        self.w = Tensor(
+            self._d.random.uniform(-1, 1, (in_features, out_features)),
+            dtype=dtype, requires_grad=True, use_np=self.use_np
+        )
+        if self.use_bias:
+            self.b = Tensor(
+                self._d.random.uniform(-1, 1, (out_features, )),
+                dtype=dtype, requires_grad=True, use_np=self.use_np
+            )
+
+    def forward(self, X: Tensor) -> Tensor:
+        """
+        fully connected layer's output is:
+        
+        `o = x @ w + b`
+        """
+        out = X @ self.w + self.b
+        return out
