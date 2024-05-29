@@ -97,8 +97,30 @@ class Tensor:
     
     # ----------------------- UNARY OPS --------------------------------
 
-    def __neg__(self):
-        return self * -1
+    def sum(self, axis: Tuple[int] = None, keepdims: bool = False):
+        """
+        sum values of tensor along given axes
+        """
+        out = Tensor(
+            self._d.sum(self.data, axis=axis, keepdims=keepdims),
+            _children=(self, ), _op="sum", use_np=self.is_np_tensor
+        )
+
+        if self.requires_grad:
+            ex_axis = axis if axis and not keepdims else None
+
+            def _sum_backward():
+                if ex_axis:
+                    self.grad += self._d.ones_like(self.grad) * self._d.expand_dims(
+                        out.grad, axis=ex_axis
+                    )
+                else:
+                    self.grad += self._d.ones_like(self.grad) * out.grad
+
+            out.grad_fn = _sum_backward
+            out.set_requires_grad(True)
+
+        return out
     
     def half(self):
         """
@@ -235,7 +257,7 @@ class Tensor:
                 out.set_requires_grad(True)
             
             return out
-                
+                        
         else:
             other = other if isinstance(other, Tensor) else Tensor(other, use_np=self.is_np_tensor)
             out = Tensor(self.data + other.data, _children=(self, other), _op='+')
@@ -333,12 +355,50 @@ class Tensor:
         out.set_requires_grad(True)
         return out
     
-    def __sub__(self, other):
+    def __pow__(self, other: Union[int, float]):
+        """
+        raise the tensor to some int or float power
+        """
+
+        assert isinstance(other, (int, float)), f"Tensor power for {type(other)} is not supported."
+
+        # numpy and mlx don't allow raising by negative values
+        def _neg_pow(a, b: Union[int, float]):
+            assert isinstance(b, (int, float))
+            return 1 / (a ** abs(b)) if b < 0 else a ** b
+        
+        out = Tensor(
+            _neg_pow(self.data, other), _children=(self, ), _op="pow", use_np=self.is_np_tensor 
+        )
+
+        # gradient is: p * a^(p-1)
+        if self.requires_grad:
+            def _pow_backward():
+                self.grad += other * _neg_pow(self.data, other - 1) * out.grad
+
+            out.grad_fn = _pow_backward
+            out.set_requires_grad(True)
+
+        return out
+    
+    def __neg__(self):
+        return self * -1
+    
+    def __sub__(self, other: "Tensor"):
         return self + (-other)
     
-    def __radd__(self, other):  # other + self
+    def __radd__(self, other: "Tensor"):  # other + self
         return self + other
+    
+    def __rmul__(self, other: "Tensor"):  # other * self
+        return self * other
 
+    def __truediv__(self, other: "Tensor"):
+        return self * (other ** -1)
+    
+    def __rtruediv__(self, other: "Tensor"):    # other / self
+        return (self ** -1) * other
+    
     def __repr__(self) -> str:
         if self.requires_grad:
             return f"Tensor({self.data}, requires_grad={self.requires_grad}, is_mlx_tensor={not self.is_np_tensor})"
