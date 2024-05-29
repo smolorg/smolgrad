@@ -26,6 +26,7 @@ class Tensor:
             use_np: bool = False
         ) -> None:
         
+        self.is_np_tensor = use_np
         self._d = self._get_d(device="gpu" if not use_np else "cpu")
         self.dtype = dtype or self._d.float32
         
@@ -47,6 +48,8 @@ class Tensor:
         self.ndim = len(self.shape)
 
     def _get_d(self, device: str = "gpu"):
+        # this is a bit misleading because mlx has unified cpu/gpu ram
+        # will be fixing this soon
         if device == "cpu":    return np
         if device == "gpu":    return mx
 
@@ -104,7 +107,8 @@ class Tensor:
         if self.dtype == self._d.float32:
             out = Tensor(
                 self.data, dtype=self._d.float16, 
-                _children = (self, ), _op = "half"
+                _children = (self, ), _op = "half",
+                use_np=self.is_np_tensor
             )
 
             if self.requires_grad:
@@ -125,7 +129,10 @@ class Tensor:
         transposes a given tensor along the given axes
         """
 
-        out = Tensor(self._d.transpose(self.data, axes=axes), _children=(self, ), _op='T')
+        out = Tensor(
+            self._d.transpose(self.data, axes=axes),
+            _children=(self, ), _op='T', use_np=self.is_np_tensor
+        )
 
         if self.requires_grad:
             def _transpose_backward():
@@ -141,7 +148,7 @@ class Tensor:
         elementwise e to the power data
         """
 
-        out = Tensor(self._d.exp(self.data), _children=(self, ), _op='exp')
+        out = Tensor(self._d.exp(self.data), _children=(self, ), _op='exp', use_np=self.is_np_tensor)
         
         if self.requires_grad:
             def _exp_backward():
@@ -159,10 +166,11 @@ class Tensor:
         matrix multiplication with tensors
         """
 
-        assert isinstance(other, Tensor), f"Cannot matrix multiply Tensor with {type(other)}."
         assert self._d == other._d, f"Tensors must be of the same type i.e. numpy or mlx"
+
+        other = other if isinstance(other, Tensor) else Tensor(other, use_np=self.is_np_tensor)
         
-        out = Tensor(self.data @ other.data, _children=(self, other), _op="@")
+        out = Tensor(self.data @ other.data, _children=(self, other), _op="@", use_np=self.is_np_tensor)
         if not self.requires_grad and not other.requires_grad:
             return out
 
@@ -185,7 +193,7 @@ class Tensor:
         #
         # self.grad = out.grad @ other.data.T
         # other.grad = self.data.T @ out.grad
-        
+
         def _matmul_backward():
             if self.requires_grad:
                 self.grad = self._d.reshape(
@@ -217,7 +225,7 @@ class Tensor:
         """
 
         if isinstance(other, (int, float)):
-            out = Tensor(self.data + other, _children=(self, ), _op='+')
+            out = Tensor(self.data + other, _children=(self, ), _op='+', use_np=self.is_np_tensor)
 
             if self.requires_grad:
                 def _add_backward_scalar():
@@ -229,7 +237,7 @@ class Tensor:
             return out
                 
         else:
-            other = other if isinstance(other, Tensor) else Tensor(other)
+            other = other if isinstance(other, Tensor) else Tensor(other, use_np=self.is_np_tensor)
             out = Tensor(self.data + other.data, _children=(self, other), _op='+')
 
             if self.requires_grad == False and other.requires_grad == False:
@@ -275,7 +283,7 @@ class Tensor:
         """
 
         if isinstance(other, (int, float)):
-            out = Tensor(self.data * other, _children=(self, ), _op='*')
+            out = Tensor(self.data * other, _children=(self, ), _op='*', use_np=self.is_np_tensor)
 
             if self.requires_grad:
                 def _mul_backward_scalar():
@@ -286,7 +294,7 @@ class Tensor:
             return out
         
         else:
-            other = other if isinstance(other, Tensor) else Tensor(other)
+            other = other if isinstance(other, Tensor) else Tensor(other, use_np=self.is_np_tensor)
             out = Tensor(self.data * other.data, _children=(self, other), _op='*')
             
             if self.requires_grad == False and other.requires_grad == False:
@@ -333,6 +341,6 @@ class Tensor:
 
     def __repr__(self) -> str:
         if self.requires_grad:
-            return f"Tensor({self.data}, requires_grad={self.requires_grad})"
+            return f"Tensor({self.data}, requires_grad={self.requires_grad}, is_mlx_tensor={not self.is_np_tensor})"
         
-        return f"Tensor({self.data})"
+        return f"Tensor({self.data}, is_mlx_tensor={not self.is_np_tensor})"
