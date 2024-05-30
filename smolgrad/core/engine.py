@@ -206,16 +206,70 @@ class Tensor:
 
         out = Tensor(self._d.exp(self.data), _children=(self, ), _op='exp', use_np=self.is_np_tensor)
         
+        # since d/dx (exp(x)) = exp(x) = out.data
         if self.requires_grad:
             def _exp_backward():
-                self.grad += self.data * out.grad
+                self.grad += out.data * out.grad
 
             out.grad_fn = _exp_backward
             out.set_requires_grad(True)
         
         return out
 
+    def log(self):
+        """
+        log base e of the tensor
+        """
+        
+        out = Tensor(self._d.log(self.data), _children=(self, ), _op="log", use_np=self.is_np_tensor)
+
+        # since d/dx (log x) = 1 / x
+        if self.requires_grad:
+            def _log_backward():
+                self.grad += (out.grad / self.data)
+
+            out.grad_fn = _log_backward
+            out.set_requires_grad(True)
+
+        return out
+
     # ------------------------ BINARY OPS -------------------------
+
+    def cat(self, other: "Tensor", axis: Optional[int] = 0):
+        """
+        concatenate self and other along a given dimension
+        """
+
+        assert isinstance(other, Tensor), f"Cannot concatenate type '{type(other)}'"
+        assert self._d == other._d, f"Tensors must be of the same type i.e. numpy or mlx"
+
+        out = Tensor(
+            self._d.concatenate([self.data, other.data], axis=axis),
+            _children=(self, other), _op="cat", use_np=self.is_np_tensor
+        )
+
+        # no one requires gradients
+        if not self.requires_grad and not other.requires_grad:
+            return out
+        
+        # for splitting into 2 tensors
+        # example: (2, n) and (4, n) -> (6, n)
+        # split index: [2] -> (2, n) and (4, n)
+        ind = [self.data.shape[axis]]
+
+        def _cat_backward():
+            # split the gradient based on the input sizes
+            g1, g2 = self._d.split(out.grad, ind, axis=axis)
+            
+            if self.requires_grad:
+                self.grad += g1
+            if other.requires_grad:
+                other.grad += g2
+
+        out.grad_fn = _cat_backward
+        out.set_requires_grad(True)
+
+        return out
 
     def __matmul__(self, other):
         """
@@ -294,6 +348,8 @@ class Tensor:
                         
         else:
             other = other if isinstance(other, Tensor) else Tensor(other, use_np=self.is_np_tensor)
+            assert self._d == other._d, f"Tensors must be of the same type i.e. numpy or mlx"
+            
             out = Tensor(self.data + other.data, _children=(self, other), _op='+')
 
             if self.requires_grad == False and other.requires_grad == False:
@@ -351,6 +407,8 @@ class Tensor:
         
         else:
             other = other if isinstance(other, Tensor) else Tensor(other, use_np=self.is_np_tensor)
+            assert self._d == other._d, f"Tensors must be of the same type i.e. numpy or mlx"
+
             out = Tensor(self.data * other.data, _children=(self, other), _op='*')
             
             if self.requires_grad == False and other.requires_grad == False:
