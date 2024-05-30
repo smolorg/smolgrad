@@ -1,3 +1,7 @@
+# This file is for various functional activation functions. 
+# They introduce non-linearity into the network, allowing it to 
+# learn more complex patterns and representations.
+
 from typing import *
 
 from ..core import Tensor
@@ -12,11 +16,13 @@ def relu(tn: Tensor) -> Tensor:
     `ReLU(x) = max(0, x)`
 
     In other words, the ReLU function returns the input value if it is positive, 
-    and 0 if the input value is negative or zero. It introduces non-linearity into the 
-    network, allowing it to learn more complex patterns and representations.
+    and 0 if the input value is negative or zero.
     """
 
-    out = Tensor(tn._d.maximum(0, tn.data), _children=(tn, ), _op="relu", use_np=tn.is_np_tensor)
+    out = Tensor(
+        tn._d.maximum(0, tn.data), dtype=tn.dtype, _children=(tn, ), 
+        _op="relu", use_np=tn.is_np_tensor
+    )
 
     if tn.requires_grad:
         # gradients will be 0 where tn's data is 0
@@ -25,6 +31,32 @@ def relu(tn: Tensor) -> Tensor:
             tn.grad += (tn.data > 0) * out.grad
         
         out.grad_fn = _relu_backward
+        out.set_requires_grad(True)
+
+    return out
+
+
+def sigmoid(tn: Tensor) -> Tensor:
+    """
+    Computes the expit (also known as the logistic sigmoid function) of the elements of input.
+
+    Formula:
+
+    `sigmoid(x) = 1 / (1 + exp(-x))`
+    """
+
+    e_1x = tn._d.exp(-tn.data)
+    out = Tensor(
+        1 / (1 + e_1x), _children=(tn, ), dtype=tn.dtype,
+        _op="sigmoid", use_np=tn.is_np_tensor
+    )
+
+    # since d/dx (1 / (1 + e^-x)) = e^-x / (1 + e^-x) ^ 2
+    if tn.requires_grad:
+        def _sigmoid_backward():
+            tn.grad += (e_1x / (1 + e_1x) ** 2) * out.grad
+
+        out.grad_fn = _sigmoid_backward
         out.set_requires_grad(True)
 
     return out

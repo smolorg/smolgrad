@@ -2,7 +2,7 @@ from typing import *
 
 from ..core import Tensor
 from ._module import Module
-from ._activations import relu
+from ._activations import *
 
 
 class ReLU(Module):
@@ -15,4 +15,16 @@ class ReLU(Module):
 
     def forward(self, x: Tensor) -> Tensor:
         out = relu(x)
+        return out
+
+
+class Sigmoid(Module):
+    """
+    Sigmoid module returns calculated sigmoid of input tensor x
+    """
+    def __init__(self) -> None:
+        pass
+
+    def forward(self, x: Tensor) -> Tensor:
+        out = sigmoid(x)
         return out
