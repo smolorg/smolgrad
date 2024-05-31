@@ -1,26 +1,28 @@
-import smolgrad.core as sc
+from smolgrad import Tensor
 import smolgrad.nn as nn
 
-inp = sc.Tensor([1, 2, 3, 4, 5])
+a = Tensor([num for num in range(1, 7)], requires_grad=True)
 
-layer = nn.Linear(5, 10)
-# output between 0 and 1
-act = nn.Sigmoid()
+mod = nn.Sequential(
+    nn.Linear(in_features=a.shape[0], out_features=3),
+    nn.ReLU(),
+    nn.Linear(in_features=3, out_features=3),
+    nn.Sigmoid()
+)
 
-out: sc.Tensor = act(layer(inp))
+out: Tensor = mod(a)
+print("Output of the model: ", out)
 
-out.backward()
+loss = out.sum()
 
-print("Output from Linear layer: ", out)
-print("Input shape: ", inp.shape)
-print("Output shape: ", out.shape)
-print("Layer weights shape: ", layer.w.shape)
-print("Layer bias shape: ", layer.b.shape)
-print("Bias grad for example: ", layer.b.grad)
+loss.backward()
 
-# Output from Linear layer:  Tensor(array([0.0110387, 0.998355, 0.118756, ..., 0.99935, 0.322409, 0.000104427], dtype=float32), requires_grad=True, is_mlx_tensor=True)
-# Input shape:  (5,)
-# Output shape:  (10,)
-# Layer weights shape:  (10, 5)
-# Layer bias shape:  (10,)
-# Bias grad for example:  array([0.0109169, 0.00164224, 0.104653, ..., 0.000649192, 0.218462, 0.000104416], dtype=float32)
+# usually we don't care about gradients of input
+# but this is just for an example of backprop from 
+# output layer to input layer
+print(a.grad)
+
+
+# Example output
+# Output of the model:  Tensor(array([0.469774, 0.389416, 0.504945], dtype=float32), requires_grad=True, is_mlx_tensor=True)
+# array([0.0401431, 0.0918337, -0.0767768, 0.0143847, 0.0724958, -0.110774], dtype=float32)
