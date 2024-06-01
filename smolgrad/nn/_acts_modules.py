@@ -28,3 +28,15 @@ class Sigmoid(Module):
     def forward(self, x: Tensor) -> Tensor:
         out = sigmoid(x)
         return out
+
+
+class Softmax(Module):
+    """
+    Calculates the softmax function for an input tensor given some axis
+    """
+    def __init__(self, dim: int = None) -> None:
+        self.dim = dim or -1
+
+    def forward(self, x: Tensor) -> Tensor:
+        out = softmax(x, axis = self.dim)
+        return out

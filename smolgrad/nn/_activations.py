@@ -60,3 +60,27 @@ def sigmoid(tn: Tensor) -> Tensor:
         out.set_requires_grad(True)
 
     return out
+
+
+def softmax(tn: Tensor, axis: int = -1) -> Tensor:
+    """
+    Applies the Softmax function to an n-dimensional input Tensor.
+
+    Rescales them so that the elements of the n-dimensional output Tensor 
+    lie in the range [0,1] and sum to 1.
+    """
+
+    # note: for numerical stability and not letting the softmax output
+    # underflow or overflow, we shift the original tensor t by max(t)
+    # also, no need to write the backward gradient flow function for this
+    # since it uses atomic tensor operations.
+    max_tn = Tensor(
+        tn._d.max(tn.data, axis=axis, keepdims=True), 
+        dtype=tn.dtype, use_np=tn.is_np_tensor
+    )
+    shifted_exp = (tn - max_tn).exp()
+
+    shifted_exp_sum = shifted_exp.sum(axis=axis, keepdims=True)
+    out = shifted_exp / shifted_exp_sum
+
+    return out
