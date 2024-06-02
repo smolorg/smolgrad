@@ -401,8 +401,9 @@ class Tensor:
                 def _mul_backward_scalar():
                     self.grad += other * out.grad
 
-            out.grad_fn = _mul_backward_scalar
-            out.set_requires_grad(True)
+                out.grad_fn = _mul_backward_scalar
+                out.set_requires_grad(True)
+            
             return out
         
         else:
