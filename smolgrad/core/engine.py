@@ -156,7 +156,7 @@ class Tensor:
 
         return out
     
-    def mean(self, axis: int = None, keepdims: bool = False):
+    def mean(self, axis: int = None, keepdims: bool = False) -> "Tensor":
         """
         calculate the arithmetic average of the Tensor elements along given axis
         """
@@ -164,6 +164,20 @@ class Tensor:
 
         # backward gradient flow already defined
         out: Tensor = self.sum(axis=axis, keepdims=keepdims) / N
+        return out
+    
+    def std(self, axis: int = None, keepdims: bool = False, correction: int = 0):
+        """
+        calculate the standard deviation of the Tensor elements along given axis
+        """
+        N: int = self.data.shape[axis] if axis is not None else self.data.size
+        assert N - correction > 0, "Correction should not be greater than or equal to number of samples."
+
+        # composed operations i.e. no need to write backward function
+        t = (self - self.mean(axis=axis, keepdims=True)) ** 2
+        t1 = t.sum(axis=axis, keepdims=keepdims) / (N - correction)
+        out = t1 ** (1/2)
+
         return out
     
     def half(self):
