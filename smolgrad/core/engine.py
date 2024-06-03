@@ -131,7 +131,7 @@ class Tensor:
 
     # ----------------------- UNARY OPS --------------------------------
 
-    def sum(self, axis: Tuple[int] = None, keepdims: bool = False):
+    def sum(self, axis: Union[int, Tuple[int]] = None, keepdims: bool = False):
         """
         sum values of tensor along given axes
         """
@@ -154,6 +154,16 @@ class Tensor:
             out.grad_fn = _sum_backward
             out.set_requires_grad(True)
 
+        return out
+    
+    def mean(self, axis: int = None, keepdims: bool = False):
+        """
+        calculate the arithmetic average of the Tensor elements along given axis
+        """
+        N: int = self.data.shape[axis] if axis is not None else self.data.size
+
+        # backward gradient flow already defined
+        out: Tensor = self.sum(axis=axis, keepdims=keepdims) / N
         return out
     
     def half(self):
