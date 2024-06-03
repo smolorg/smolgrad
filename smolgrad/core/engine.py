@@ -166,19 +166,28 @@ class Tensor:
         out: Tensor = self.sum(axis=axis, keepdims=keepdims) / N
         return out
     
-    def std(self, axis: int = None, keepdims: bool = False, correction: int = 0):
-        """
-        calculate the standard deviation of the Tensor elements along given axis
-        """
+    def _stdvar_helper__(self, axis: int = None, keepdims: bool = False, correction: int = 0) -> "Tensor":
         N: int = self.data.shape[axis] if axis is not None else self.data.size
         assert N - correction > 0, "Correction should not be greater than or equal to number of samples."
 
         # composed operations i.e. no need to write backward function
         t = (self - self.mean(axis=axis, keepdims=True)) ** 2
         t1 = t.sum(axis=axis, keepdims=keepdims) / (N - correction)
-        out = t1 ** (1/2)
-
-        return out
+        
+        return t1
+    
+    def std(self, axis: int = None, keepdims: bool = False, correction: int = 0):
+        """
+        calculate the standard deviation of the Tensor elements along given axis
+        """
+        t1 = self._stdvar_helper__(axis=axis, keepdims=keepdims, correction=correction)
+        return t1 ** (1/2)
+    
+    def var(self, axis: int = None, keepdims: bool = False, correction: int = 0):
+        """
+        calculate variance along given axis and correction
+        """
+        return self._stdvar_helper__(axis=axis, keepdims=keepdims, correction=correction)
     
     def half(self):
         """
