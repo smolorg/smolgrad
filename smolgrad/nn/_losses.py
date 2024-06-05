@@ -39,7 +39,7 @@ class BCELoss(Module):
     def forward(self, pred: Tensor, actual: Tensor) -> Tensor:
         _check_tensor_types(pred, actual)
 
-        a: Tensor = -pred * actual.clip(self.eps, 1 - self.eps).log()
+        a: Tensor = pred * actual.clip(self.eps, 1 - self.eps).log()
         b: Tensor = (1 - pred) * (1 - actual).clip(self.eps, 1 - self.eps).log()
 
         return -(a + b).sum() / pred.shape[0]

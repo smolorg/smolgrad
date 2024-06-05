@@ -1,4 +1,4 @@
-from typing import Union, Any
+from typing import List, Union, Any
 
 from ._module import Module
 from ..core import Tensor
@@ -24,6 +24,13 @@ class Sequential(Module):
         add the given module at the end of the sequential list
         """
         self.modules.append(module)
+
+    def parameters(self) -> List[Tensor]:
+        t = []
+        for mod in self.modules:
+            t += mod.parameters()
+        
+        return t
 
     def forward(self, x: Union[Tensor, Any]) -> Union[Tensor, Any]:
         if len(self.modules) == 0:

@@ -1,17 +1,18 @@
 from smolgrad import Tensor
 import smolgrad.nn as nn
 
-pred = Tensor([num for num in range(1, 7)], requires_grad=True)
-actual = Tensor([1, 3, 2, 4, 5, 6])
+in_feats, out_feats = 2, 1
 
-loss = nn.MSELoss()
+model = nn.Sequential(
+    nn.Linear(in_feats, 5),
+    nn.ReLU(),
+    nn.Linear(5, 10),
+    nn.ReLU(),
+    nn.Linear(10, out_feats),
+    nn.Sigmoid()    
+)
 
-output: Tensor = loss(pred, actual)
-output.backward()
-
-print("Output of the loss function: ", output)
-print(pred.grad)
-
+print(model.parameters())
 
 # Example output
 # Output of the loss function:  Tensor(array(2, dtype=float32), requires_grad=True, is_mlx_tensor=True)

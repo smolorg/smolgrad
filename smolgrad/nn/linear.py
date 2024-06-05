@@ -39,5 +39,5 @@ class Linear(Module):
         
         `o = w @ x + b`
         """
-        out = self.w @ X + self.b
+        out = X @ self.w.T() + self.b
         return out

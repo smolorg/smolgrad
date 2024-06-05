@@ -554,6 +554,9 @@ class Tensor:
     def __sub__(self, other: "Tensor"):
         return self + (-other)
     
+    def __rsub__(self, other: "Tensor"):    # other - self
+        return -self + other
+    
     def __radd__(self, other: "Tensor"):  # other + self
         return self + other
     
