@@ -24,7 +24,7 @@ def relu(tn: Tensor) -> Tensor:
         _op="relu", use_np=tn.is_np_tensor
     )
 
-    if tn.requires_grad:
+    if tn.requires_grad and Tensor.grad_is_enabled:
         # gradients will be 0 where tn's data is 0
         # elsewhere they will be just copied backwards
         def _relu_backward():
@@ -52,7 +52,7 @@ def sigmoid(tn: Tensor) -> Tensor:
     )
 
     # since d/dx (1 / (1 + e^-x)) = e^-x / (1 + e^-x) ^ 2
-    if tn.requires_grad:
+    if tn.requires_grad and Tensor.grad_is_enabled:
         def _sigmoid_backward():
             tn.grad += (e_1x / (1 + e_1x) ** 2) * out.grad
 

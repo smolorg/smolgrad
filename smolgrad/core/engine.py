@@ -30,10 +30,25 @@ def _get_d(device: str = "gpu"):
     if device == "gpu":    return mx if MLX_AVAILABLE else np
 
 
+class no_grad:
+    """
+    Context-manager that disables gradient calculation.
+    """
+
+    def __enter__(self):
+        self.previous = Tensor.grad_is_enabled
+        Tensor.grad_is_enabled = False
+
+    def __exit__(self):
+        Tensor.grad_is_enabled = self.previous
+
+
 class Tensor:
     """
     holds elements having the same dtype
     """
+    grad_is_enabled: bool = True
+
     def __init__(
             self,
             data: Union[Array, Any],
@@ -50,7 +65,8 @@ class Tensor:
         
         # actual data
         self.data = (
-            self._d.array(data, self.dtype) if not isinstance(data, Array) else data.astype(dtype=self.dtype)
+            self._d.array(data, self.dtype) if not isinstance(data, Array) 
+            else data.astype(dtype=self.dtype)
         )
 
         # operation this tensor originates from along with children
@@ -59,7 +75,10 @@ class Tensor:
 
         # gradient
         self.requires_grad = requires_grad
-        self.grad = self._d.zeros_like(self.data) if self.requires_grad else None
+        self.grad = (
+            self._d.zeros_like(self.data) if self.requires_grad and self.grad_is_enabled 
+            else None
+        )
         self.grad_fn = None
 
         self.shape = self.data.shape
@@ -140,7 +159,7 @@ class Tensor:
             _children=(self, ), _op="sum", use_np=self.is_np_tensor
         )
 
-        if self.requires_grad:
+        if self.requires_grad and self.grad_is_enabled:
             ex_axis = axis if axis and not keepdims else None
 
             def _sum_backward():
@@ -200,7 +219,7 @@ class Tensor:
                 use_np=self.is_np_tensor
             )
 
-            if self.requires_grad:
+            if self.requires_grad and self.grad_is_enabled:
                 # just copy the gradients backward
                 def _half_backward():
                     self.grad += out.grad
@@ -223,7 +242,7 @@ class Tensor:
             _children=(self, ), _op='T', use_np=self.is_np_tensor
         )
 
-        if self.requires_grad:
+        if self.requires_grad and self.grad_is_enabled:
             def _transpose_backward():
                 self.grad += self._d.transpose(out.grad, axes=axes)
             
@@ -240,7 +259,7 @@ class Tensor:
         out = Tensor(self._d.exp(self.data), _children=(self, ), _op='exp', use_np=self.is_np_tensor)
         
         # since d/dx (exp(x)) = exp(x) = out.data
-        if self.requires_grad:
+        if self.requires_grad and self.grad_is_enabled:
             def _exp_backward():
                 self.grad += out.data * out.grad
 
@@ -257,11 +276,29 @@ class Tensor:
         out = Tensor(self._d.log(self.data), _children=(self, ), _op="log", use_np=self.is_np_tensor)
 
         # since d/dx (log x) = 1 / x
-        if self.requires_grad:
+        if self.requires_grad and self.grad_is_enabled:
             def _log_backward():
                 self.grad += (out.grad / self.data)
 
             out.grad_fn = _log_backward
+            out.set_requires_grad(True)
+
+        return out
+    
+    def reshape(self, *shape: Tuple[int]):
+        """
+        change the tensor's shape
+        """
+        out = Tensor(
+            self.data.reshape(shape), dtype=self.dtype, use_np=self.is_np_tensor,
+            _children=(self, ), _op="reshape"
+        )
+
+        if self.requires_grad and self.grad_is_enabled:
+            def _reshape_backward():
+                self.grad += out.grad.reshape(self.data.shape)
+
+            out.grad_fn = _reshape_backward
             out.set_requires_grad(True)
 
         return out
@@ -285,22 +322,23 @@ class Tensor:
         if not self.requires_grad and not other.requires_grad:
             return out
         
-        # for splitting into 2 tensors
-        # example: (2, n) and (4, n) -> (6, n)
-        # split index: [2] -> (2, n) and (4, n)
-        ind = [self.data.shape[axis]]
+        if self.grad_is_enabled:
+            # for splitting into 2 tensors
+            # example: (2, n) and (4, n) -> (6, n)
+            # split index: [2] -> (2, n) and (4, n)
+            ind = [self.data.shape[axis]]
 
-        def _cat_backward():
-            # split the gradient based on the input sizes
-            g1, g2 = self._d.split(out.grad, ind, axis=axis)
-            
-            if self.requires_grad:
-                self.grad += g1
-            if other.requires_grad:
-                other.grad += g2
+            def _cat_backward():
+                # split the gradient based on the input sizes
+                g1, g2 = self._d.split(out.grad, ind, axis=axis)
+                
+                if self.requires_grad:
+                    self.grad += g1
+                if other.requires_grad:
+                    other.grad += g2
 
-        out.grad_fn = _cat_backward
-        out.set_requires_grad(True)
+            out.grad_fn = _cat_backward
+            out.set_requires_grad(True)
 
         return out
 
@@ -317,48 +355,49 @@ class Tensor:
         if not self.requires_grad and not other.requires_grad:
             return out
 
-        # for 1D tensors, expand first dimension for first tensor
-        # and expand last dimension for second tensor
-        # example: (3,) @ (3,) becomes (1, 3) and (3, 1)
-        # which is compatible for matrix multiplication
-        le_axis = (0, ) if self.data.ndim == 1 else ()
-        re_axis = (-1, ) if other.data.ndim == 1 else ()
+        if self.grad_is_enabled:
+            # for 1D tensors, expand first dimension for first tensor
+            # and expand last dimension for second tensor
+            # example: (3,) @ (3,) becomes (1, 3) and (3, 1)
+            # which is compatible for matrix multiplication
+            le_axis = (0, ) if self.data.ndim == 1 else ()
+            re_axis = (-1, ) if other.data.ndim == 1 else ()
 
-        # resultant tensor's grad should be expanded by both le_axis and re_axis
-        rese_axis = le_axis + re_axis
+            # resultant tensor's grad should be expanded by both le_axis and re_axis
+            rese_axis = le_axis + re_axis
 
-        # we need to take broadcasting into account
-        # except last two dimensions of shape (since they will be used for matmul)
-        # gradients will be summed along the broadcasted axes for both tensors
-        l, r = broadcast_axis(self.data.shape[:-2], other.data.shape[:-2])
+            # we need to take broadcasting into account
+            # except last two dimensions of shape (since they will be used for matmul)
+            # gradients will be summed along the broadcasted axes for both tensors
+            l, r = broadcast_axis(self.data.shape[:-2], other.data.shape[:-2])
 
-        # for 2D (can be generalized for more dimensions too):
-        #
-        # self.grad = out.grad @ other.data.T
-        # other.grad = self.data.T @ out.grad
+            # for 2D (can be generalized for more dimensions too):
+            #
+            # self.grad = out.grad @ other.data.T
+            # other.grad = self.data.T @ out.grad
 
-        def _matmul_backward():
-            if self.requires_grad:
-                self.grad = self._d.reshape(
-                    self._d.sum(
-                        self._d.expand_dims(out.grad, axis=rese_axis) @
-                        self._d.expand_dims(other.data, axis=re_axis).swapaxes(-1, -2),
-                        axis = l
-                    ),
-                    self.data.shape
-                )
-            if other.requires_grad:
-                other.grad = self._d.reshape(
-                    self._d.sum(
-                        self._d.expand_dims(self.data, axis=le_axis).swapaxes(-1, -2) @
-                        self._d.expand_dims(out.grad, axis=rese_axis),
-                        axis = r
-                    ),
-                    other.data.shape
-                )
+            def _matmul_backward():
+                if self.requires_grad:
+                    self.grad = self._d.reshape(
+                        self._d.sum(
+                            self._d.expand_dims(out.grad, axis=rese_axis) @
+                            self._d.expand_dims(other.data, axis=re_axis).swapaxes(-1, -2),
+                            axis = l
+                        ),
+                        self.data.shape
+                    )
+                if other.requires_grad:
+                    other.grad = self._d.reshape(
+                        self._d.sum(
+                            self._d.expand_dims(self.data, axis=le_axis).swapaxes(-1, -2) @
+                            self._d.expand_dims(out.grad, axis=rese_axis),
+                            axis = r
+                        ),
+                        other.data.shape
+                    )
 
-        out.grad_fn = _matmul_backward
-        out.set_requires_grad(True)
+            out.grad_fn = _matmul_backward
+            out.set_requires_grad(True)
 
         return out
 
@@ -370,7 +409,7 @@ class Tensor:
         if isinstance(other, (int, float)):
             out = Tensor(self.data + other, _children=(self, ), _op='+', use_np=self.is_np_tensor)
 
-            if self.requires_grad:
+            if self.requires_grad and self.grad_is_enabled:
                 def _add_backward_scalar():
                         self.grad += out.grad
 
@@ -388,39 +427,40 @@ class Tensor:
             if self.requires_grad == False and other.requires_grad == False:
                 return out
             
-            if self.shape == other.shape:
-                # same shape, so gradient for addition will be just propagated
-                # backwards equally to self and other from the resultant Tensor (out)
-                def _add_backward_same():
-                    if self.requires_grad:
-                        self.grad += out.grad
-                    if other.requires_grad:
-                        other.grad += out.grad   
+            if self.grad_is_enabled:
+                if self.shape == other.shape:
+                    # same shape, so gradient for addition will be just propagated
+                    # backwards equally to self and other from the resultant Tensor (out)
+                    def _add_backward_same():
+                        if self.requires_grad:
+                            self.grad += out.grad
+                        if other.requires_grad:
+                            other.grad += out.grad   
 
-                out.grad_fn = _add_backward_same
-            
-            else:
-                # different shapes, broadcast occurs
-                # gradient will be summed along the broadcasted axes
-                # since the out Tensor is result of broadcasting and addition
-                # in essence, broadcasted axes are copied and added, so gradients from 
-                # all the copies should be added
-                laxis, raxis = broadcast_axis(self.data.shape, other.data.shape)
-
-                def _add_backward_diff():
-                    if self.requires_grad:
-                        self.grad += self._d.reshape(
-                            self._d.sum(out.grad, axis=laxis), self.shape
-                        )
-                    if other.requires_grad:
-                        other.grad += self._d.reshape(
-                            self._d.sum(out.grad, axis=raxis), other.shape
-                        )
+                    out.grad_fn = _add_backward_same
                 
-                out.grad_fn = _add_backward_diff
+                else:
+                    # different shapes, broadcast occurs
+                    # gradient will be summed along the broadcasted axes
+                    # since the out Tensor is result of broadcasting and addition
+                    # in essence, broadcasted axes are copied and added, so gradients from 
+                    # all the copies should be added
+                    laxis, raxis = broadcast_axis(self.data.shape, other.data.shape)
 
-        out.set_requires_grad(True)
-        return out
+                    def _add_backward_diff():
+                        if self.requires_grad:
+                            self.grad += self._d.reshape(
+                                self._d.sum(out.grad, axis=laxis), self.shape
+                            )
+                        if other.requires_grad:
+                            other.grad += self._d.reshape(
+                                self._d.sum(out.grad, axis=raxis), other.shape
+                            )
+                    
+                    out.grad_fn = _add_backward_diff
+
+            out.set_requires_grad(True)
+            return out
     
     def __mul__(self, other):
         """
@@ -430,7 +470,7 @@ class Tensor:
         if isinstance(other, (int, float)):
             out = Tensor(self.data * other, _children=(self, ), _op='*', use_np=self.is_np_tensor)
 
-            if self.requires_grad:
+            if self.requires_grad and self.grad_is_enabled:
                 def _mul_backward_scalar():
                     self.grad += other * out.grad
 
@@ -448,38 +488,39 @@ class Tensor:
             if self.requires_grad == False and other.requires_grad == False:
                 return out
             
-            if self.shape == other.shape:
-                def _mul_backward_same():
-                    if self.requires_grad:
-                        self.grad += other.data * out.grad
-                    if other.requires_grad:
-                        other.grad += self.data * out.grad
+            if self.grad_is_enabled:
+                if self.shape == other.shape:
+                    def _mul_backward_same():
+                        if self.requires_grad:
+                            self.grad += other.data * out.grad
+                        if other.requires_grad:
+                            other.grad += self.data * out.grad
 
-                out.grad_fn = _mul_backward_same
+                    out.grad_fn = _mul_backward_same
 
-            else:
-                # for broadcast multiply
-                # different shapes, broadcast occurs
-                # gradient will be summed along the broadcasted axes
-                # since the out Tensor is result of broadcasting and addition
-                # in essence, broadcasted axes are copied and added, so gradients from 
-                # all the copies should be added
-                laxis, raxis = broadcast_axis(self.data.shape, other.data.shape)
+                else:
+                    # for broadcast multiply
+                    # different shapes, broadcast occurs
+                    # gradient will be summed along the broadcasted axes
+                    # since the out Tensor is result of broadcasting and addition
+                    # in essence, broadcasted axes are copied and added, so gradients from 
+                    # all the copies should be added
+                    laxis, raxis = broadcast_axis(self.data.shape, other.data.shape)
 
-                def _mul_backward_diff():
-                    if self.requires_grad:
-                        self.grad += self._d.reshape(
-                            self._d.sum(other.data * out.grad, axis=laxis), self.shape
-                        )
-                    if other.requires_grad:
-                        other.grad += self._d.reshape(
-                            self._d.sum(self.data * out.grad, axis=raxis), other.shape
-                        )
-                
-                out.grad_fn = _mul_backward_diff
+                    def _mul_backward_diff():
+                        if self.requires_grad:
+                            self.grad += self._d.reshape(
+                                self._d.sum(other.data * out.grad, axis=laxis), self.shape
+                            )
+                        if other.requires_grad:
+                            other.grad += self._d.reshape(
+                                self._d.sum(self.data * out.grad, axis=raxis), other.shape
+                            )
+                    
+                    out.grad_fn = _mul_backward_diff
 
-        out.set_requires_grad(True)
-        return out
+            out.set_requires_grad(True)
+            return out
     
     def __pow__(self, other: Union[int, float]):
         """
@@ -498,7 +539,7 @@ class Tensor:
         )
 
         # gradient is: p * a^(p-1)
-        if self.requires_grad:
+        if self.requires_grad and self.grad_is_enabled:
             def _pow_backward():
                 self.grad += other * _neg_pow(self.data, other - 1) * out.grad
 
