@@ -1,4 +1,4 @@
-from ..core import Tensor
+from ..core import Tensor, DEFAULT_MIN
 from ._module import Module
 
 
@@ -33,7 +33,7 @@ class BCELoss(Module):
     """
     Calculate Binary cross entropy loss between predictions and target
     """
-    def __init__(self, eps: float = 1e-7) -> None:
+    def __init__(self, eps: float = DEFAULT_MIN) -> None:
         self.eps = eps
 
     def forward(self, pred: Tensor, actual: Tensor) -> Tensor:

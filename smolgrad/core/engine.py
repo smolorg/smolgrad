@@ -15,8 +15,8 @@ from ..utils import broadcast_axis
 
 
 # constants
-DEFAULT_MIN = 1e-7
-DEFAULT_MAX = 1 - 1e-7
+DEFAULT_MIN = 1e-6
+DEFAULT_MAX = 1 - 1e-6
 
 # base type
 Array = Union[np.ndarray, mx.array]
