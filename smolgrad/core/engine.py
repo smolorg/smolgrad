@@ -39,7 +39,7 @@ class no_grad:
         self.previous = Tensor.grad_is_enabled
         Tensor.grad_is_enabled = False
 
-    def __exit__(self):
+    def __exit__(self, exc_type, exc_value, traceback):
         Tensor.grad_is_enabled = self.previous
 
 
