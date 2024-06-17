@@ -10,6 +10,7 @@ except ImportError as e:
     MLX_AVAILABLE = False
 
 from typing import *
+from functools import partial
 
 from ..utils import broadcast_axis
 
@@ -341,6 +342,40 @@ class Tensor:
             out.set_requires_grad(True)
 
         return out
+    
+    def split(self, sections: int, dim: int = 0) -> List["Tensor"]:
+        """
+        splits the tensor into equal sections along the given dimension
+        """
+        datas: List[Array] = self._d.split(self.data, sections, axis=dim)
+        outs: List[Tensor] = [
+            Tensor(
+                _d, self.dtype, _children=(self, ), _op="split", 
+                requires_grad=self.requires_grad, use_np=self.is_np_tensor
+            ) for _d in datas
+        ]
+
+        if not self.requires_grad:  return outs
+        if self.grad_is_enabled:
+            # update corresponding subarray of gradients using indices
+            indices, start = [], 0
+            for part in outs:
+                idx = [slice(None)] * self.ndim
+                idx[dim] = slice(start, start + part.shape[dim])
+                indices.append(tuple(idx))
+                start += part.shape[dim]
+            
+            def _split_backward(index: int = 0):
+                _o, idx = outs[index], indices[index]
+                if self.requires_grad:
+                    self.grad[idx] += _o.grad
+
+            # set the backward for different split parts
+            for i, part in enumerate(outs):
+                _grad_fn = partial(_split_backward, index = i)
+                part.grad_fn = _grad_fn
+                part.set_requires_grad(True)
+        return outs
 
     def __matmul__(self, other):
         """

@@ -1,11 +1,12 @@
 from smolgrad.core import Tensor
 
-a = Tensor([[1, 2], [3, 4]], requires_grad=True)
+x = Tensor([1, 2, 3, 4], requires_grad=True)
 
-b = a.var(axis=1, correction=1)
-c = b.sum()
+a, b = x.split(2, dim=-1)
 
-c.backward()
+y = (a * b).sum()
 
-print("output of std: ", b)
-print("gradient of a: ", a.grad)
+y.backward()
+
+print("output of std: ", y)
+print("gradient of a: ", x.grad)
