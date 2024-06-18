@@ -89,13 +89,13 @@ class Tensor:
         self.shape = self.data.shape
         self.ndim = len(self.shape)
 
-    def _reset_grad(self):
+    def _reset_grad(self) -> None:
         """
         Sets the gradient values to zero
         """
         self.grad = self._d.zeros_like(self.data)
 
-    def set_requires_grad(self, val: bool):
+    def set_requires_grad(self, val: bool) -> None:
         if not isinstance(val, bool):
             raise ValueError("Value should be boolean")
         
@@ -104,7 +104,7 @@ class Tensor:
 
         self.requires_grad = val
 
-    def backward(self):
+    def backward(self) -> None:
         """
         sort the graph topologically.
         run the grad function from the last node to first
@@ -141,7 +141,7 @@ class Tensor:
             self, min: float = DEFAULT_MIN, 
             max: float = DEFAULT_MAX, clip_grad: bool = False, 
             grad_min: float = DEFAULT_MIN, grad_max: float = DEFAULT_MAX
-        ):
+        ) -> "Tensor":
         """
         constrain the Tensor/gradient values between given min max range
         """
@@ -155,7 +155,7 @@ class Tensor:
 
     # ----------------------- UNARY OPS --------------------------------
 
-    def sum(self, axis: Union[int, Tuple[int]] = None, keepdims: bool = False):
+    def sum(self, axis: Union[int, Tuple[int]] = None, keepdims: bool = False) -> "Tensor":
         """
         sum values of tensor along given axes
         """
@@ -200,20 +200,20 @@ class Tensor:
         
         return t1
     
-    def std(self, axis: int = None, keepdims: bool = False, correction: int = 0):
+    def std(self, axis: int = None, keepdims: bool = False, correction: int = 0) -> "Tensor":
         """
         calculate the standard deviation of the Tensor elements along given axis
         """
         t1 = self._stdvar_helper__(axis=axis, keepdims=keepdims, correction=correction)
         return t1 ** (1/2)
     
-    def var(self, axis: int = None, keepdims: bool = False, correction: int = 0):
+    def var(self, axis: int = None, keepdims: bool = False, correction: int = 0) -> "Tensor":
         """
         calculate variance along given axis and correction
         """
         return self._stdvar_helper__(axis=axis, keepdims=keepdims, correction=correction)
     
-    def half(self):
+    def half(self) -> "Tensor":
         """
         convert the data and gradients to half precision i.e. float32 -> float16
         """
@@ -237,7 +237,7 @@ class Tensor:
         else:
             raise ValueError(f"Cannot convert Tensor with dtype {self.dtype} to half precision.")
 
-    def T(self, axes: Iterable = None):
+    def T(self, axes: Iterable = None) -> "Tensor":
         """
         transposes a given tensor along the given axes
         """
@@ -256,7 +256,7 @@ class Tensor:
         
         return out
     
-    def exp(self):
+    def exp(self) -> "Tensor":
         """
         elementwise e to the power data
         """
@@ -273,7 +273,7 @@ class Tensor:
         
         return out
 
-    def log(self):
+    def log(self) -> "Tensor":
         """
         log base e of the tensor
         """
@@ -290,7 +290,7 @@ class Tensor:
 
         return out
     
-    def reshape(self, *shape: Tuple[int]):
+    def reshape(self, *shape: Tuple[int]) -> "Tensor":
         """
         change the tensor's shape
         """
@@ -310,7 +310,7 @@ class Tensor:
 
     # ------------------------ BINARY OPS -------------------------
 
-    def cat(self, others: List["Tensor"], dim: Optional[int] = 0):
+    def cat(self, others: List["Tensor"], dim: Optional[int] = 0) -> "Tensor":
         """
         concatenate self and other along a given dimension
         """
@@ -380,7 +380,7 @@ class Tensor:
                 part.set_requires_grad(True)
         return outs
 
-    def __matmul__(self, other):
+    def __matmul__(self, other) -> "Tensor":
         """
         matrix multiplication with tensors
         """
@@ -439,7 +439,7 @@ class Tensor:
 
         return out
 
-    def __add__(self, other):
+    def __add__(self, other) -> "Tensor":
         """
         elementwise add (takes broadcasting into account)
         """
@@ -500,7 +500,7 @@ class Tensor:
             out.set_requires_grad(True)
             return out
     
-    def __mul__(self, other):
+    def __mul__(self, other) -> "Tensor":
         """
         element wise multiply (takes broadcasting into account)
         """
@@ -560,7 +560,7 @@ class Tensor:
             out.set_requires_grad(True)
             return out
     
-    def __pow__(self, other: Union[int, float]):
+    def __pow__(self, other: Union[int, float]) -> "Tensor":
         """
         raise the tensor to some int or float power
         """
