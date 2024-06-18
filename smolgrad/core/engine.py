@@ -33,14 +33,18 @@ def _get_d(device: str = "gpu"):
 
 class no_grad:
     """
-    Context-manager that disables gradient calculation.
+    Context-manager that disables 
+    gradient calculation.
     """
 
     def __enter__(self):
         self.previous = Tensor.grad_is_enabled
         Tensor.grad_is_enabled = False
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    def __exit__(
+            self, exc_type, 
+            exc_value, traceback
+        ):
         Tensor.grad_is_enabled = self.previous
 
 
