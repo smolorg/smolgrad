@@ -310,37 +310,36 @@ class Tensor:
 
     # ------------------------ BINARY OPS -------------------------
 
-    def cat(self, other: "Tensor", axis: Optional[int] = 0):
+    def cat(self, others: List["Tensor"], dim: Optional[int] = 0):
         """
         concatenate self and other along a given dimension
         """
-
-        assert isinstance(other, Tensor), f"Cannot concatenate type '{type(other)}'"
-        assert self._d == other._d, f"Tensors must be of the same type i.e. numpy or mlx"
+        tocat: List[Tensor] = [self]
+        for _o in others:
+            assert isinstance(_o, Tensor), f"Cannot concatenate type '{type(_o)}'"
+            assert self._d == _o._d, f"Tensors must be of the same type i.e. numpy or mlx"
+            tocat.append(_o)
 
         out = Tensor(
-            self._d.concatenate([self.data, other.data], axis=axis),
-            _children=(self, other), _op="cat", use_np=self.is_np_tensor
+            self._d.concatenate([t.data for t in tocat], axis=dim),
+            _children=tuple(tocat), _op="cat", use_np=self.is_np_tensor
         )
+        _allfalse = self._d.array([not ob.requires_grad for ob in tocat])
 
-        # no one requires gradients
-        if not self.requires_grad and not other.requires_grad:
+        # no children require gradients
+        if self._d.all(_allfalse).item():
             return out
         
         if self.grad_is_enabled:
-            # for splitting into 2 tensors
-            # example: (2, n) and (4, n) -> (6, n)
-            # split index: [2] -> (2, n) and (4, n)
-            ind = [self.data.shape[axis]]
+            sizes = [t.shape[dim] for t in tocat]
+            sizes = self._d.array(sizes[:-1])
+            splits = self._d.cumsum(sizes).tolist()
+            grads = self._d.split(out.grad, splits, axis=dim)
 
             def _cat_backward():
-                # split the gradient based on the input sizes
-                g1, g2 = self._d.split(out.grad, ind, axis=axis)
-                
-                if self.requires_grad:
-                    self.grad += g1
-                if other.requires_grad:
-                    other.grad += g2
+                for i, tsor in enumerate(tocat):
+                    if tsor.requires_grad:
+                        tsor.grad += grads[i]
 
             out.grad_fn = _cat_backward
             out.set_requires_grad(True)
