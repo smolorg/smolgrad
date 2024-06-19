@@ -11,6 +11,7 @@ class Module:
     def __init__(self, device: str = "gpu") -> None:
         self.device = device
         self._d = _get_d(device=self.device)
+        self.is_training = True
 
     def _get_tensors(self) -> List[Tensor]:
         """
@@ -25,6 +26,18 @@ class Module:
                 tensors += value._get_tensors()
         
         return tensors
+    
+    def train(self) -> None:
+        """
+        Set the module to training
+        """
+        self.is_training = True
+    
+    def eval(self) -> None:
+        """
+        Set module to evaluation
+        """
+        self.is_training = False
     
     def parameters(self) -> List[Tensor]:
         """

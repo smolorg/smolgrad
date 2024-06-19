@@ -308,6 +308,26 @@ class Tensor:
 
         return out
 
+    def masked_fill(self, mask: Union[Array, list], value: Any) -> "Tensor":
+        assert isinstance(mask, Array) or isinstance(mask, list)
+        if isinstance(mask, list):
+            mask = self._d.array(mask, dtype=self._d.int8)
+
+        data = self._d.where(mask, self._d.array(value), self.data)
+        out = Tensor(
+            data, dtype=self.dtype, _children=(self, ), _op="mafill", 
+            requires_grad=self.requires_grad, use_np=self.is_np_tensor
+        )
+
+        if self.requires_grad and self.grad_is_enabled:
+            def _masked_fill_backward():
+                self.grad += self._d.where(mask, self._d.array(0), out.grad)
+        
+            out.grad_fn = _masked_fill_backward
+            out.set_requires_grad(True)
+        
+        return out
+
     # ------------------------ BINARY OPS -------------------------
 
     def cat(self, others: List["Tensor"], dim: Optional[int] = 0) -> "Tensor":
