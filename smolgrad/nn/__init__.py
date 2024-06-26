@@ -1,4 +1,4 @@
-from ._module import Module
+from ._module import Module, ModuleList, ModuleDict
 from ._acts_modules import *
 from ._losses import *
 

@@ -109,6 +109,9 @@ class Tensor:
         sort the graph topologically.
         run the grad function from the last node to first
         """
+        if not self.grad_is_enabled:
+            raise ValueError("cannot backward when gradient calculation is disabled.")
+        
         ordering = []
         
         visited = set()
@@ -184,8 +187,14 @@ class Tensor:
         """
         calculate the arithmetic average of the Tensor elements along given axis
         """
-        N: int = self.data.shape[axis] if axis is not None else self.data.size
-
+        N = self.data.size
+        if isinstance(axis, int):
+            N = self.data.shape[axis]
+        if isinstance(axis, (tuple, list)):
+            N = 1
+            for dim in axis:
+                N *= dim
+        
         # backward gradient flow already defined
         out: Tensor = self.sum(axis=axis, keepdims=keepdims) / N
         return out
@@ -628,7 +637,4 @@ class Tensor:
         return (self ** -1) * other
     
     def __repr__(self) -> str:
-        if self.requires_grad:
-            return f"Tensor({self.data}, requires_grad={self.requires_grad}, is_mlx_tensor={not self.is_np_tensor})"
-        
         return f"Tensor({self.data}, is_mlx_tensor={not self.is_np_tensor})"
