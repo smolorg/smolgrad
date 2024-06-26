@@ -24,8 +24,8 @@ class Embedding(Module):
     def forward(self, input: Tensor) -> Tensor:
         # ensure input is of integer type
         if input.dtype not in [self._d.int32, self._d.int64]:
-            input.data = input.data.astype(self._d.int64)
-            input.dtype = self._d.int64
+            input.data = input.data.astype(self._d.int32)
+            input.dtype = self._d.int32
 
         # perform the embedding lookup
         out = self.weight[input.data]
