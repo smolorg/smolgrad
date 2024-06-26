@@ -6,3 +6,4 @@ from .linear import Linear
 from .sequential import Sequential
 from .dropout import Dropout
 from .layernorm import LayerNorm
+from .embedding import Embedding
