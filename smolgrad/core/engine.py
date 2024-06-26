@@ -5,9 +5,13 @@ import numpy as np
 try:
     import mlx.core as mx
     MLX_AVAILABLE = True
-except ImportError as e:
+except ImportError:
     print(">>> Warning: MLX cannot be imported. Using numpy as default...")
     MLX_AVAILABLE = False
+    class Dummy:
+        def __getattr__(self, attr):
+            return None
+    mx = Dummy()
 
 from typing import *
 from functools import partial
@@ -160,7 +164,7 @@ class Tensor:
         """
         Set values of the tensor using indices.
         """
-        assert self._d == other._d, f"Tensors must be of the same type i.e. numpy or mlx"
+        assert self._d == other._d, "Tensors must be of the same type i.e. numpy or mlx"
         assert isinstance(other, Tensor)
 
         self.data[indices] = other.data.astype(self.data.dtype).copy()
@@ -187,6 +191,24 @@ class Tensor:
         return out
 
     # ----------------------- UNARY OPS --------------------------------
+    def broadcast_to(self, shape: Tuple[int]) -> "Tensor":
+        """
+        broadcast tensor to a given shape
+        """
+        data = self._d.broadcast_to(self.data, shape)
+        out = Tensor(
+            data, dtype=self.dtype, _children=(self, ), _op="broadcast", use_np=self.is_np_tensor
+        )
+        broadcasted_axes = broadcast_axis(self.shape, shape)[0] # we are interested in left axes
+
+        if self.requires_grad and self.grad_is_enabled:
+            def _broadcast_backward():
+                self.grad += self._d.sum(out.grad, axis=broadcasted_axes)
+            
+            out.grad_fn = _broadcast_backward
+            out.set_requires_grad(True)
+
+        return out
 
     def sum(self, axis: Union[int, Tuple[int]] = None, keepdims: bool = False) -> "Tensor":
         """
@@ -376,7 +398,7 @@ class Tensor:
         tocat: List[Tensor] = [self]
         for _o in others:
             assert isinstance(_o, Tensor), f"Cannot concatenate type '{type(_o)}'"
-            assert self._d == _o._d, f"Tensors must be of the same type i.e. numpy or mlx"
+            assert self._d == _o._d, "Tensors must be of the same type i.e. numpy or mlx"
             tocat.append(_o)
 
         out = Tensor(
@@ -444,7 +466,7 @@ class Tensor:
         matrix multiplication with tensors
         """
 
-        assert self._d == other._d, f"Tensors must be of the same type i.e. numpy or mlx"
+        assert self._d == other._d, "Tensors must be of the same type i.e. numpy or mlx"
 
         other = other if isinstance(other, Tensor) else Tensor(other, use_np=self.is_np_tensor)
         
@@ -498,64 +520,37 @@ class Tensor:
 
         return out
 
+    def _preprocess_binop(self, other: "Tensor") -> Tuple["Tensor", "Tensor"]:
+        """
+        preprocesses the two tensors before performing binary operations
+        """
+        # first convert to tensor if not already
+        other = other if isinstance(other, Tensor) else Tensor(other, use_np=self.is_np_tensor)
+        assert self._d == other._d, "Tensors must be of the same type i.e. numpy or mlx"
+
+        # broadcast the tensors to the same shape (this will propagate the gradients too)
+        broadcast_shape = np.broadcast_shapes(self.shape, other.shape)
+        self, other = self.broadcast_to(broadcast_shape), other.broadcast_to(broadcast_shape)
+        return self, other
+    
     def __add__(self, other) -> "Tensor":
         """
         elementwise add (takes broadcasting into account)
         """
+        self, other = self._preprocess_binop(other)
 
-        if isinstance(other, (int, float)):
-            out = Tensor(self.data + other, _children=(self, ), _op='+', use_np=self.is_np_tensor)
+        out = Tensor(self.data + other.data, _children=(self, other), _op='+')
 
-            if self.requires_grad and self.grad_is_enabled:
-                def _add_backward_scalar():
-                        self.grad += out.grad
-
-                out.grad_fn = _add_backward_scalar
-                out.set_requires_grad(True)
-            
-            return out
-                        
-        else:
-            other = other if isinstance(other, Tensor) else Tensor(other, use_np=self.is_np_tensor)
-            assert self._d == other._d, f"Tensors must be of the same type i.e. numpy or mlx"
-            
-            out = Tensor(self.data + other.data, _children=(self, other), _op='+')
-
-            if self.requires_grad == False and other.requires_grad == False:
+        if self.requires_grad == False and other.requires_grad == False:
                 return out
-            
-            if self.grad_is_enabled:
-                if self.shape == other.shape:
-                    # same shape, so gradient for addition will be just propagated
-                    # backwards equally to self and other from the resultant Tensor (out)
-                    def _add_backward_same():
-                        if self.requires_grad:
-                            self.grad += out.grad
-                        if other.requires_grad:
-                            other.grad += out.grad   
+        if self.grad_is_enabled:
+            def _add_backward():
+                if self.requires_grad:
+                    self.grad += out.grad
+                if other.requires_grad:
+                    other.grad += out.grad
 
-                    out.grad_fn = _add_backward_same
-                
-                else:
-                    # different shapes, broadcast occurs
-                    # gradient will be summed along the broadcasted axes
-                    # since the out Tensor is result of broadcasting and addition
-                    # in essence, broadcasted axes are copied and added, so gradients from 
-                    # all the copies should be added
-                    laxis, raxis = broadcast_axis(self.data.shape, other.data.shape)
-
-                    def _add_backward_diff():
-                        if self.requires_grad:
-                            self.grad += self._d.reshape(
-                                self._d.sum(out.grad, axis=laxis), self.shape
-                            )
-                        if other.requires_grad:
-                            other.grad += self._d.reshape(
-                                self._d.sum(out.grad, axis=raxis), other.shape
-                            )
-                    
-                    out.grad_fn = _add_backward_diff
-
+            out.grad_fn = _add_backward
             out.set_requires_grad(True)
             return out
     
@@ -564,58 +559,21 @@ class Tensor:
         element wise multiply (takes broadcasting into account)
         """
 
-        if isinstance(other, (int, float)):
-            out = Tensor(self.data * other, _children=(self, ), _op='*', use_np=self.is_np_tensor)
-
-            if self.requires_grad and self.grad_is_enabled:
-                def _mul_backward_scalar():
-                    self.grad += other * out.grad
-
-                out.grad_fn = _mul_backward_scalar
-                out.set_requires_grad(True)
-            
-            return out
+        self, other = self._preprocess_binop(other)
         
-        else:
-            other = other if isinstance(other, Tensor) else Tensor(other, use_np=self.is_np_tensor)
-            assert self._d == other._d, f"Tensors must be of the same type i.e. numpy or mlx"
-
-            out = Tensor(self.data * other.data, _children=(self, other), _op='*')
+        out = Tensor(self.data * other.data, _children=(self, other), _op='*')
             
-            if self.requires_grad == False and other.requires_grad == False:
+        if self.requires_grad == False and other.requires_grad == False:
                 return out
             
-            if self.grad_is_enabled:
-                if self.shape == other.shape:
-                    def _mul_backward_same():
-                        if self.requires_grad:
-                            self.grad += other.data * out.grad
-                        if other.requires_grad:
-                            other.grad += self.data * out.grad
+        if self.grad_is_enabled:
+            def _mul_backward():
+                if self.requires_grad:
+                    self.grad += other.data * out.grad
+                if other.requires_grad:
+                    other.grad += self.data * out.grad
 
-                    out.grad_fn = _mul_backward_same
-
-                else:
-                    # for broadcast multiply
-                    # different shapes, broadcast occurs
-                    # gradient will be summed along the broadcasted axes
-                    # since the out Tensor is result of broadcasting and addition
-                    # in essence, broadcasted axes are copied and added, so gradients from 
-                    # all the copies should be added
-                    laxis, raxis = broadcast_axis(self.data.shape, other.data.shape)
-
-                    def _mul_backward_diff():
-                        if self.requires_grad:
-                            self.grad += self._d.reshape(
-                                self._d.sum(other.data * out.grad, axis=laxis), self.shape
-                            )
-                        if other.requires_grad:
-                            other.grad += self._d.reshape(
-                                self._d.sum(self.data * out.grad, axis=raxis), other.shape
-                            )
-                    
-                    out.grad_fn = _mul_backward_diff
-
+            out.grad_fn = _mul_backward
             out.set_requires_grad(True)
             return out
     
