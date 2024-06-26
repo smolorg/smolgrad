@@ -36,6 +36,32 @@ def relu(tn: Tensor) -> Tensor:
     return out
 
 
+def tanh(tn: Tensor) -> Tensor:
+    """
+    Apply the hyperbolic tangent (tanh) activation function element-wise.
+
+    Args:
+        val (Tensor): The input tensor.
+
+    Returns:
+        Tensor: The tensor with tanh applied element-wise.
+    """
+
+    out = Tensor(
+        tn._d.tanh(0, tn.data), dtype=tn.dtype, _children=(tn, ), 
+        _op="tanh", use_np=tn.is_np_tensor
+    )
+
+    if tn.requires_grad and Tensor.grad_is_enabled:
+        def _tanh_backward():
+            tn.grad += (1 - out.data**2) * out.grad
+
+        out._backward = _tanh_backward
+        out.requires_grad = True
+
+    return out
+
+
 def sigmoid(tn: Tensor) -> Tensor:
     """
     Computes the expit (also known as the logistic sigmoid function) of the elements of input.

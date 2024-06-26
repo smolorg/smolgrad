@@ -10,6 +10,7 @@ class Module:
     def __init__(self, device: str = "gpu") -> None:
         self.device = device
         self._d = _get_d(device=self.device)
+        self.use_np = False if device=="gpu" else True
         self.is_training = True
 
     def _get_tensors(self) -> List[Tensor]:
@@ -57,6 +58,21 @@ class Module:
         """
         raise NotImplementedError("Module base class's forward method is not implemented")
     
+    def state_dict(self, prefix: str = '') -> Dict[str, Any]:
+        """
+        Returns a dictionary containing a whole state of the module.
+        Both parameters and persistent buffers (e.g. running averages) are included.
+        """
+        state_dict = {}
+        for name, value in self.__dict__.items():
+            pref = f"{prefix}.{name}" if prefix else name
+            if isinstance(value, Tensor):
+                state_dict[pref] = value
+            elif isinstance(value, (Module, ModuleList, ModuleDict)):
+                state_dict = state_dict | value.state_dict(prefix=pref)
+    
+        return state_dict
+
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """
         Call the `forward` method with the given arguments and keyword arguments
@@ -96,6 +112,13 @@ class ModuleList(Module):
             params.extend(module.parameters())
         return params
 
+    def state_dict(self, prefix: str = '') -> Dict[str, Any]:
+        sd = {}
+        for index, mod in enumerate(self._modules):
+            pref = f"{prefix}.{index}" if prefix else index
+            sd |= mod.state_dict(prefix=pref)
+        return sd
+        
     def forward(self, x: Any) -> Any:
         for module in self._modules:
             x = module(x)
@@ -150,7 +173,14 @@ class ModuleDict(Module):
         for module in self._modules.values():
             params.extend(module.parameters())
         return params
-
+    
+    def state_dict(self, prefix: str = '') -> Dict[str, Any]:
+        sd = {}
+        for k, mod in self._modules.items():
+            pref = f"{prefix}.{k}" if prefix else k
+            sd |= mod.state_dict(prefix=pref)
+        return sd
+    
     def forward(self, x: Any) -> Any:
         for module in self._modules.values():
             x = module(x)
