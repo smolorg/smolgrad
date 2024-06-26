@@ -39,5 +39,7 @@ class Linear(Module):
         
         `o = w @ x + b`
         """
-        out = X @ self.weight.T() + self.bias
+        out = X @ self.weight.T()
+        if self.use_bias:
+            out += self.bias
         return out
