@@ -155,6 +155,36 @@ class Tensor:
             self.grad = self._d.clip(self.grad, grad_min, grad_max)
 
         return self
+    
+    def __setitem__(self, indices, other):
+        """
+        Set values of the tensor using indices.
+        """
+        assert self._d == other._d, f"Tensors must be of the same type i.e. numpy or mlx"
+        assert isinstance(other, Tensor)
+
+        self.data[indices] = other.data.astype(self.data.dtype).copy()
+        self.grad[indices] = other.grad.astype(self.grad.dtype).copy()
+
+    def __getitem__(self, indices):
+        """
+        Get a subset of the tensor using indices.
+        """
+
+        out = Tensor(
+            self.data[indices], dtype=self.dtype, 
+            _children=(self, ), _op="getitem", 
+            requires_grad=self.requires_grad, use_np=self.is_np_tensor
+        )
+
+        if self.requires_grad and self.grad_is_enabled:
+            def _getitem_backward():
+                self.grad[indices] += out.grad
+
+            out._backward = _getitem_backward
+            out.requires_grad = True
+
+        return out
 
     # ----------------------- UNARY OPS --------------------------------
 
