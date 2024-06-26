@@ -10,11 +10,11 @@ class LayerNorm(Module):
         self.use_np = False if device == "gpu" else True
 
         # Initialize gamma and beta parameters
-        self.gamma = Tensor(
+        self.weight = Tensor(
             self._d.ones(self.normalized_shape),
             dtype=self._d.float32, requires_grad=True, use_np=self.use_np
         )
-        self.beta = Tensor(
+        self.bias = Tensor(
             self._d.zeros(self.normalized_shape),
             dtype=self._d.float32, requires_grad=True, use_np=self.use_np
         )
@@ -31,4 +31,4 @@ class LayerNorm(Module):
         x_norm = (x - mean) / ((var + self.eps) ** 0.5)
 
         # Scale and shift
-        return self.gamma * x_norm + self.beta
+        return self.weight * x_norm + self.bias

@@ -23,12 +23,12 @@ class Linear(Module):
         self.use_bias = use_bias
         self.use_np = False if device=="gpu" else True
 
-        self.w = Tensor(
+        self.weight = Tensor(
             self._d.random.uniform(-1, 1, (out_features, in_features)),
             dtype=dtype, requires_grad=True, use_np=self.use_np
         )
         if self.use_bias:
-            self.b = Tensor(
+            self.bias = Tensor(
                 self._d.random.uniform(-1, 1, (out_features, )),
                 dtype=dtype, requires_grad=True, use_np=self.use_np
             )
@@ -39,5 +39,5 @@ class Linear(Module):
         
         `o = w @ x + b`
         """
-        out = X @ self.w.T() + self.b
+        out = X @ self.weight.T() + self.bias
         return out
