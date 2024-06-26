@@ -48,7 +48,7 @@ def tanh(tn: Tensor) -> Tensor:
     """
 
     out = Tensor(
-        tn._d.tanh(0, tn.data), dtype=tn.dtype, _children=(tn, ), 
+        tn._d.tanh(tn.data), dtype=tn.dtype, _children=(tn, ), 
         _op="tanh", use_np=tn.is_np_tensor
     )
 
