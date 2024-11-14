@@ -68,13 +68,14 @@ class Tensor:
             use_np: bool = False
         ) -> None:
         
-        self.is_np_tensor = use_np
-        self._d = _get_d(device="gpu" if not use_np else "cpu")
+        self.is_np_tensor = True if (use_np or isinstance(data, np.ndarray)) else False
+        self._d = _get_d(device="gpu" if not self.is_np_tensor else "cpu")
         self.dtype = dtype or self._d.float32
         
         # actual data
+        array_type = (np.ndarray, mx.array) if mx.array is not None else (np.ndarray, )
         self.data = (
-            self._d.array(data, self.dtype) if not isinstance(data, Array) 
+            self._d.array(data, self.dtype) if not isinstance(data, array_type)
             else data.astype(dtype=self.dtype)
         )
 
@@ -539,7 +540,7 @@ class Tensor:
         """
         self, other = self._preprocess_binop(other)
 
-        out = Tensor(self.data + other.data, _children=(self, other), _op='+')
+        out = Tensor(self.data + other.data, _children=(self, other), _op='+', use_np=self.is_np_tensor)
 
         if self.requires_grad == False and other.requires_grad == False:
                 return out
@@ -561,7 +562,7 @@ class Tensor:
 
         self, other = self._preprocess_binop(other)
         
-        out = Tensor(self.data * other.data, _children=(self, other), _op='*')
+        out = Tensor(self.data * other.data, _children=(self, other), _op='*', use_np=self.is_np_tensor)
             
         if self.requires_grad == False and other.requires_grad == False:
                 return out

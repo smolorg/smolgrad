@@ -5,13 +5,12 @@ from smolgrad.core.engine import (
 
 a = Tensor(
     [1, 2], 
-    requires_grad=True
+    requires_grad=True,
+    use_np=True
 )
 
 with no_grad():
     x = a + a
     y = x.sum()
+    # will raise an error
     y.backward()
-
-# will be 0
-print(a.grad)
