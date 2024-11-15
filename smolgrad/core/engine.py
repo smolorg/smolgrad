@@ -6,7 +6,7 @@ try:
     import mlx.core as mx
     MLX_AVAILABLE = True
 except ImportError:
-    print(">>> Warning: MLX cannot be imported. Using numpy as default...")
+    # print(">>> Warning: MLX cannot be imported. Using numpy as default...")
     MLX_AVAILABLE = False
     class Dummy:
         def __getattr__(self, attr):
