@@ -85,14 +85,14 @@ class Tensor:
 
         # gradient
         self.requires_grad = requires_grad
-        self.grad = (
-            self._d.zeros_like(self.data) if self.requires_grad and self.grad_is_enabled 
-            else None
-        )
+        self.grad = self._d.zeros_like(self.data)
         self.grad_fn = None
 
         self.shape = self.data.shape
         self.ndim = len(self.shape)
+
+        # hooks to run after calculating the gradient
+        self._grad_hooks: List[Callable] = []
 
     def _reset_grad(self) -> None:
         """
@@ -108,6 +108,16 @@ class Tensor:
             self._reset_grad()
 
         self.requires_grad = val
+
+    def register_grad_hook(self, hook: Callable) -> None:
+        """
+        Add a hook to be called after calculation of gradient
+        """
+        assert hook not in self._grad_hooks
+        self._grad_hooks.append(hook)
+    
+    def reset_grad_hooks(self) -> None:
+        self._grad_hooks = []
 
     def backward(self) -> None:
         """
@@ -144,6 +154,12 @@ class Tensor:
         for node in reversed(ordering):
             if node.grad_fn is not None:
                 node.grad_fn()
+            # call the registered gradient hooks
+            # on the current node (maybe leaf node or internal node)
+            # if the node requires gradient or grad is enabled
+            if node.requires_grad and self.grad_is_enabled:
+                for hook in self._grad_hooks:
+                    hook(node)
     
     def clip(
             self, min: float = DEFAULT_MIN, 
@@ -187,7 +203,7 @@ class Tensor:
                 self.grad[indices] += out.grad
 
             out._backward = _getitem_backward
-            out.requires_grad = True
+            out.set_requires_grad(True)
 
         return out
 
@@ -625,6 +641,9 @@ class Tensor:
     def __rtruediv__(self, other: "Tensor"):    # other / self
         return (self ** -1) * other
     
+    def __hash__(self):
+        return id(self)
+
     def __eq__(self, other: "Tensor"):
         return (self.data == other.data).all() and (self.is_np_tensor == other.is_np_tensor)
     
