@@ -1,4 +1,5 @@
 from typing import *
+from collections import OrderedDict
 
 from ..core import Tensor, _get_d
 
@@ -58,12 +59,12 @@ class Module:
         """
         raise NotImplementedError("Module base class's forward method is not implemented")
     
-    def state_dict(self, prefix: str = '') -> Dict[str, Any]:
+    def state_dict(self, prefix: str = '') -> OrderedDict:
         """
         Returns a dictionary containing a whole state of the module.
         Both parameters and persistent buffers (e.g. running averages) are included.
         """
-        state_dict = {}
+        state_dict = OrderedDict()
         for name, value in self.__dict__.items():
             pref = f"{prefix}.{name}" if prefix else name
             if isinstance(value, Tensor):
@@ -72,6 +73,22 @@ class Module:
                 state_dict = state_dict | value.state_dict(prefix=pref)
     
         return state_dict
+    
+    def load_state_dict(self, state_dict: OrderedDict, prefix: str = '') -> None:
+        """
+        Copy parameters from state_dict into this module and its descendants.
+        """
+        for name, value in self.__dict__.items():
+            pref = f"{prefix}.{name}" if prefix else name
+            if isinstance(value, Tensor):
+                # replace the parameter's data with the new one
+                # if the new one exists in the state_dict
+                new_value: Tensor = state_dict.get(pref, False)
+                if not new_value:
+                    raise ValueError(f"The key '{pref}' does not exist in the original Module for replacement")
+                value.data[:] = new_value.data
+            elif isinstance(value, (Module, ModuleList, ModuleDict)):
+                value.load_state_dict(state_dict, prefix=pref)
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """
@@ -112,12 +129,17 @@ class ModuleList(Module):
             params.extend(module.parameters())
         return params
 
-    def state_dict(self, prefix: str = '') -> Dict[str, Any]:
-        sd = {}
+    def state_dict(self, prefix: str = '') -> OrderedDict:
+        state_dict = OrderedDict()
         for index, mod in enumerate(self._modules):
             pref = f"{prefix}.{index}" if prefix else str(index)
-            sd |= mod.state_dict(prefix=pref)
-        return sd
+            state_dict |= mod.state_dict(prefix=pref)
+        return state_dict
+    
+    def load_state_dict(self, state_dict, prefix = ''):
+        for index, mod in enumerate(self._modules):
+            pref = f"{prefix}.{index}" if prefix else str(index)
+            mod.load_state_dict(state_dict, prefix=pref)
         
     def forward(self, x: Any) -> Any:
         for module in self._modules:
@@ -174,12 +196,17 @@ class ModuleDict(Module):
             params.extend(module.parameters())
         return params
     
-    def state_dict(self, prefix: str = '') -> Dict[str, Any]:
-        sd = {}
+    def state_dict(self, prefix: str = '') -> OrderedDict:
+        state_dict = OrderedDict()
         for k, mod in self._modules.items():
             pref = f"{prefix}.{k}" if prefix else k
-            sd |= mod.state_dict(prefix=pref)
-        return sd
+            state_dict |= mod.state_dict(prefix=pref)
+        return state_dict
+    
+    def load_state_dict(self, state_dict, prefix = ''):
+        for k, mod in self._modules.items():
+            pref = f"{prefix}.{k}" if prefix else k
+            mod.load_state_dict(state_dict, prefix=pref)
     
     def forward(self, x: Any) -> Any:
         for module in self._modules.values():

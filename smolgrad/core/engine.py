@@ -625,5 +625,8 @@ class Tensor:
     def __rtruediv__(self, other: "Tensor"):    # other / self
         return (self ** -1) * other
     
+    def __eq__(self, other: "Tensor"):
+        return (self.data == other.data).all() and (self.is_np_tensor == other.is_np_tensor)
+    
     def __repr__(self) -> str:
         return f"Tensor({self.data}, is_mlx_tensor={not self.is_np_tensor})"
