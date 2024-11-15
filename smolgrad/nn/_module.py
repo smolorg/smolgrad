@@ -115,7 +115,7 @@ class ModuleList(Module):
     def state_dict(self, prefix: str = '') -> Dict[str, Any]:
         sd = {}
         for index, mod in enumerate(self._modules):
-            pref = f"{prefix}.{index}" if prefix else index
+            pref = f"{prefix}.{index}" if prefix else str(index)
             sd |= mod.state_dict(prefix=pref)
         return sd
         
