@@ -68,7 +68,7 @@ class Module:
         for name, value in self.__dict__.items():
             pref = f"{prefix}.{name}" if prefix else name
             if isinstance(value, Tensor):
-                state_dict[pref] = value
+                state_dict[pref] = value.data
             elif isinstance(value, (Module, ModuleList, ModuleDict)):
                 state_dict = state_dict | value.state_dict(prefix=pref)
     
@@ -83,10 +83,10 @@ class Module:
             if isinstance(value, Tensor):
                 # replace the parameter's data with the new one
                 # if the new one exists in the state_dict
-                new_value: Tensor = state_dict.get(pref, False)
-                if not new_value:
+                new_value = state_dict.get(pref, None)
+                if new_value is None:
                     raise ValueError(f"The key '{pref}' does not exist in the original Module for replacement")
-                value.data[:] = new_value.data
+                value.data[:] = new_value
             elif isinstance(value, (Module, ModuleList, ModuleDict)):
                 value.load_state_dict(state_dict, prefix=pref)
 
