@@ -85,7 +85,10 @@ class Tensor:
 
         # gradient
         self.requires_grad = requires_grad
-        self.grad = self._d.zeros_like(self.data)
+        self.grad = (
+            self._d.zeros_like(self.data) if self.requires_grad and self.grad_is_enabled 
+            else None
+        )
         self.grad_fn = None
 
         self.shape = self.data.shape
@@ -429,6 +432,7 @@ class Tensor:
             return out
         
         if self.grad_is_enabled:
+            out.set_requires_grad(True)
             sizes = [t.shape[dim] for t in tocat]
             sizes = self._d.array(sizes[:-1])
             splits = self._d.cumsum(sizes).tolist()
@@ -440,7 +444,6 @@ class Tensor:
                         tsor.grad += grads[i]
 
             out.grad_fn = _cat_backward
-            out.set_requires_grad(True)
 
         return out
     
