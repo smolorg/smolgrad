@@ -23,8 +23,8 @@ class Module:
         for _, value in self.__dict__.items():
             if isinstance(value, Tensor):
                 tensors.append(value)
-            elif isinstance(value, Module):
-                tensors += value._get_tensors()
+            elif isinstance(value, (Module, ModuleList, ModuleDict)):
+                tensors += value.parameters()
         
         return tensors
     

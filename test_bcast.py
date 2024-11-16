@@ -24,7 +24,9 @@ def create_model(comm: MPI.Intracomm):
     else:
         state_dict = None
     state_dict = comm.bcast(state_dict, root=ROOT_PROCESS_ID)
-    model.load_state_dict(state_dict)
+    if rank != ROOT_PROCESS_ID:
+        print(f"Loading model from state dict in rank {rank} ...")
+        model.load_state_dict(state_dict)
     print(f"Last parameter of model in rank {rank}:\n{model.parameters()[-1]}")
 
 
