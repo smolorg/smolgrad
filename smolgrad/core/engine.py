@@ -1,6 +1,7 @@
 # this file uses numpy / mlx in order to perform tensor operations
 
 import numpy as np
+from mpi4py import MPI
 
 try:
     import mlx.core as mx
@@ -96,6 +97,8 @@ class Tensor:
 
         # hooks to run after calculating the gradient
         self._grad_hooks: List[Callable] = []
+        # the all-reduce request variable
+        self._request: MPI.Request = None
 
     def _reset_grad(self) -> None:
         """

@@ -5,6 +5,43 @@ from ..core import Tensor
 from ..nn import Module, ModuleList, ModuleDict
 
 
+def gradient_allreduce(comm: MPI.Intracomm, param: Tensor):
+    """
+    This hook (function) starts a non-blocking allreduce (average)
+    communication for the parameters as soon as their final gradients are calculated.
+    Non-blocking call helps us start calculating the gradients for the next layer which
+    basically interleaves communication (this layer) with computation (next layer).
+
+    TODO: optimization - Starting a communication for each parameter is not optimal. Pytorch' DDP handles this
+    by putting the parameters in buckets.
+    """
+    if param.requires_grad and param.grad is not None:
+        # inplace all-reduce (average will be calculated later)
+        param._request = comm.Iallreduce(
+            MPI.IN_PLACE, param.grad, op=MPI.SUM
+        )
+
+def gradients_wait_for_all(params: List[Tensor], world_size: int):
+    """
+    After the full backward pass, we will wait for all the reduction
+    communication to finish, and only then we can ensure that the gradients
+    on all the processes are the same.
+    """
+    requests = [
+        param._request for param in params
+        if param.requires_grad and param.grad is not None and 
+        param._request is not None
+    ]
+    MPI.Request.Waitall(requests)
+
+    # average the gradients on all processes now
+    # gradients are all summed, we just need to 
+    # divide by the world_size
+    for param in params:
+        if param.requires_grad and param.grad is not None:
+            param.grad[:] = param.grad / world_size
+
+
 class DistributedDataParallel:
     def __init__(
             self, model: Union[Module, ModuleList, ModuleDict], 
