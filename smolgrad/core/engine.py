@@ -164,7 +164,7 @@ class Tensor:
             # on the current node (maybe leaf node or internal node)
             # if the node requires gradient or grad is enabled
             if node.requires_grad and self.grad_is_enabled:
-                for hook in self._grad_hooks:
+                for hook in node._grad_hooks:
                     hook(node)
     
     def clip(
