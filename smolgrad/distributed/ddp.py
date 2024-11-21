@@ -57,6 +57,7 @@ class DistributedDataParallel:
 
     def train(self) -> None:
         self.model.train()
+        self.register_hooks()
     
     def eval(self) -> None:
         self.model.eval()
@@ -70,8 +71,24 @@ class DistributedDataParallel:
     def parameters(self) -> List[Tensor]:
         return self.model.parameters()
     
-    def __call__(self, *args, **kwargs) -> Any:
-        return self.model(*args, **kwargs)
+    def synchronize(self) -> None:
+        """
+        Across all the processes, let the gradients be reduced
+        """
+        if self.model.is_training:
+            gradients_wait_for_all(self.model.parameters(), self.world_size)
+            for param in self.model.parameters():
+                param.reset_grad_hooks()
+
+            # hooks for next iteration
+            self.register_hooks()
+    
+    def register_hooks(self) -> None:
+        if self.model.is_training:
+            for param in self.model.parameters():
+                param.register_grad_hook(
+                    lambda p: gradient_allreduce(self.comm, p)
+                )
 
     def _broadcast_model(self) -> None:
         """
@@ -85,3 +102,6 @@ class DistributedDataParallel:
         state_dict = self.comm.bcast(state_dict, root=self.root)
         if self.rank != self.root:
             self.model.load_state_dict(state_dict)
+
+    def __call__(self, *args, **kwargs) -> Any:
+        return self.model(*args, **kwargs)
